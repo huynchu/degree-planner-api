@@ -3,6 +3,7 @@ module github.com/huynchu/degree-planner-api
 go 1.20
 
 require (
+	github.com/go-chi/chi/v5 v5.0.10
 	github.com/spf13/viper v1.16.0
 	go.mongodb.org/mongo-driver v1.12.1
 )

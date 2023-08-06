@@ -13,8 +13,9 @@ type CourseDB struct {
 	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Name          string             `bson:"name" json:"name"`
 	Code          string             `bson:"code" json:"code"`
-	Prerequisites []string           `bson:"prerequisites" json:"prerequisites"`
+	Prerequisites [][]string         `bson:"prerequisites" json:"prerequisites"`
 	Corequisites  []string           `bson:"corequisites" json:"corequisites"`
+	CrossListings []string           `bson:"crossListings" json:"crossListings"`
 }
 
 type CourseStorage struct {

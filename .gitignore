@@ -1,1 +1,4 @@
 app.env
+internal/workers/catalog.json
+internal/workers/prereq_data.json
+tmp.txt

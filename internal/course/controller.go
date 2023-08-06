@@ -20,10 +20,10 @@ func NewCourseController(storage *CourseStorage) *CourseController {
 }
 
 type CreateCourseRequest struct {
-	Name          string   `json:"name"`
-	Code          string   `json:"code"`
-	Prerequisites []string `json:"prerequisites"`
-	Corequisites  []string `json:"corequisites"`
+	Name          string     `json:"name"`
+	Code          string     `json:"code"`
+	Prerequisites [][]string `json:"prerequisites"`
+	Corequisites  []string   `json:"corequisites"`
 }
 
 func (s *CourseController) CreateCourse(w http.ResponseWriter, r *http.Request) {

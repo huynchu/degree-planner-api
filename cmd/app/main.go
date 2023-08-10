@@ -1,15 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/huynchu/degree-planner-api/config"
 	"github.com/huynchu/degree-planner-api/internal/course"
+	"github.com/huynchu/degree-planner-api/internal/degree-csv"
 	"github.com/huynchu/degree-planner-api/internal/storage"
 )
 
@@ -46,6 +50,20 @@ func main() {
 	courseStorage := course.NewCourseStorage(db)
 	courseController := course.NewCourseController(courseStorage)
 	course.AddCourseRoutes(r, courseController)
+
+	// create s3 client
+	cfg, err := awsconfig.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		fmt.Printf("error: %v", err)
+		exitCode = 1
+		return
+	}
+	s3Client := s3.NewFromConfig(cfg)
+
+	// add degree csv routes
+	degreeCsvStorage := degree.NewDegreeCsvStorage("degree_csv", storage.NewS3FileStorage(s3Client))
+	degreeCsvController := degree.NewDegreeCsvController(degreeCsvStorage)
+	r.Post("/degree-csv", degreeCsvController.UploadDegreeCsv)
 
 	// start server
 	fmt.Println("starting server...")

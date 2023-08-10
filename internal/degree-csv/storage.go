@@ -20,6 +20,9 @@ func NewDegreeCsvStorage(bucket string, storage *storage.S3FileStorage) *DegreeC
 }
 
 func (s *DegreeCsvStorage) Upload(key string, file multipart.File) (*s3.PutObjectOutput, error) {
-	res, err := s.storage.Upload(s.bucket, key, file)
-	return res, err
+	return s.storage.Upload(s.bucket, key, file)
+}
+
+func (s *DegreeCsvStorage) GetFileDownloadLink(key string) (string, error) {
+	return s.storage.GetFileDownloadLink(s.bucket, key)
 }

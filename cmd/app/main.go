@@ -61,7 +61,7 @@ func main() {
 	s3Client := s3.NewFromConfig(cfg)
 
 	// add degree csv routes
-	degreeCsvStorage := degree.NewDegreeCsvStorage("degree_csv", storage.NewS3FileStorage(s3Client))
+	degreeCsvStorage := degree.NewDegreeCsvStorage("degree-csv", storage.NewS3FileStorage(s3Client))
 	degreeCsvController := degree.NewDegreeCsvController(degreeCsvStorage)
 	r.Post("/degree-csv", degreeCsvController.UploadDegreeCsv)
 

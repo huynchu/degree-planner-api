@@ -2,6 +2,7 @@ package degree
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -46,19 +47,23 @@ func (s *DegreeCsvController) UploadDegreeCsv(w http.ResponseWriter, r *http.Req
 	defer file.Close()
 
 	// Upload file to s3
-	uploadResult, err := s.storage.Upload(fileHeader[0].Filename, file)
+	_, err = s.storage.Upload(fileHeader[0].Filename, file)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	downloadURL, err := s.storage.GetFileDownloadLink(fileHeader[0].Filename)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fmt.Println(downloadURL)
 	// Encode json response
 	response := struct {
-		FileUrl  string      `json:"file_url"`
-		Metadata interface{} `json:"location"`
+		FileUrl string `json:"file_url"`
 	}{
-		Metadata: uploadResult.ResultMetadata,
-		FileUrl:  "https://" + s.storage.bucket + ".s3.amazonaws.com/" + fileHeader[0].Filename,
+		FileUrl: downloadURL,
 	}
 
 	// Respond with json

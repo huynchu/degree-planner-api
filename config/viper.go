@@ -16,6 +16,10 @@ type EnvVars struct {
 	// Quatalog course data urls
 	COURSE_DATA_URL        string `mapstructure:"COURSE_DATA_URL"`
 	COURSE_PREREQ_DATA_URL string `mapstructure:"COURSE_PREREQ_DATA_URL"`
+
+	// Auth0 config
+	AUTH0_DOMAIN   string `mapstructure:"AUTH0_DOMAIN"`
+	AUTH0_AUDIENCE string `mapstructure:"AUTH0_AUDIENCE"`
 }
 
 func LoadConfig() (config EnvVars, err error) {
@@ -27,6 +31,8 @@ func LoadConfig() (config EnvVars, err error) {
 			PORT:                   os.Getenv("PORT"),
 			COURSE_DATA_URL:        os.Getenv("COURSE_DATA_URL"),
 			COURSE_PREREQ_DATA_URL: os.Getenv("COURSE_PREREQ_DATA_URL"),
+			AUTH0_DOMAIN:           os.Getenv("AUTH0_DOMAIN"),
+			AUTH0_AUDIENCE:         os.Getenv("AUTH0_AUDIENCE"),
 		}, nil
 	}
 
@@ -64,5 +70,14 @@ func LoadConfig() (config EnvVars, err error) {
 		return
 	}
 
+	if config.AUTH0_DOMAIN == "" {
+		err = errors.New("AUTH0_DOMAIN is required")
+		return
+	}
+
+	if config.AUTH0_AUDIENCE == "" {
+		err = errors.New("AUTH0_AUDIENCE is required")
+		return
+	}
 	return
 }

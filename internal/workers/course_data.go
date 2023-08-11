@@ -5,12 +5,31 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/huynchu/degree-planner-api/config"
 	"github.com/huynchu/degree-planner-api/internal/course"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func RunCourseDataCronWorker() {
+type CourseDataWorker struct {
+	db *mongo.Database
+}
+
+func NewCourseDataWorker(db *mongo.Database) *CourseDataWorker {
+	return &CourseDataWorker{
+		db: db,
+	}
+}
+
+func (w *CourseDataWorker) Run() {
+	courseData := make(map[string]*course.CourseDB)
+	populateCourseData(courseData)
+
+	for _, c := range courseData {
+		fmt.Println(c)
+	}
 }
 
 type courseJson struct {
@@ -20,45 +39,7 @@ type courseJson struct {
 	// Desc string `json:"description"`
 }
 
-func fetchCourseData(url string, courseData map[string]*course.CourseDB) error {
-	// Make the GET request
-	response, err := http.Get(url)
-	if err != nil {
-		fmt.Printf("error: %v", err)
-		return err
-	}
-	defer response.Body.Close()
-
-	// Read the response body
-	data, err := io.ReadAll(response.Body)
-	if err != nil {
-		fmt.Println("Error reading response body:", err)
-		return err
-	}
-
-	// Convert response body to json
-	var courseDataMap map[string]courseJson
-	err = json.Unmarshal(data, &courseDataMap)
-	if err != nil {
-		fmt.Println("Error unmarshalling response body:", err)
-		return err
-	}
-
-	// populate courseData
-	for key, c := range courseDataMap {
-		newDBCourse := &course.CourseDB{
-			Code:          key,
-			Name:          c.Name,
-			Prerequisites: [][]string{},
-			Corequisites:  []string{},
-			CrossListings: []string{},
-		}
-		courseData[key] = newDBCourse
-	}
-	return nil
-}
-
-type CoursePrerequisiteJson struct {
+type coursePrerequisiteJson struct {
 	// Atributes     []string     `json:"attributes"`
 	Corequisites  []string     `json:"corequisites"`
 	CrossListings []string     `json:"cross_listings"`
@@ -71,30 +52,50 @@ type Prerequisite struct {
 	Nested []Prerequisite `json:"nested,omitempty"`
 }
 
-func fetchCoursePrereqData(url string, courseData map[string]*course.CourseDB) error {
-	// Make the GET request
-	response, err := http.Get(url)
+func populateCourseData(courseData map[string]*course.CourseDB) error {
+	// Get course catalog data
+	catalogData, err := fetchCourseCatalogData()
 	if err != nil {
-		fmt.Printf("error: %v", err)
-		return err
-	}
-	defer response.Body.Close()
-
-	// Read the response body
-	data, err := io.ReadAll(response.Body)
-	if err != nil {
-		fmt.Println("Error reading response body:", err)
+		fmt.Println("Error fetching course catalog data:", err)
 		return err
 	}
 
-	coursePrereqDataMap := make(map[string]CoursePrerequisiteJson)
-	err = json.Unmarshal(data, &coursePrereqDataMap)
+	// Decode course catalog data
+	courseDataMap := make(map[string]courseJson)
+	err = json.Unmarshal(catalogData, &courseDataMap)
 	if err != nil {
 		fmt.Println("Error unmarshalling response body:", err)
 		return err
 	}
 
-	// populate courseData
+	// Get course prereq data
+	prereqData, err := fetchCoursePrereqData()
+	if err != nil {
+		fmt.Println("Error fetching course prereq data:", err)
+		return err
+	}
+
+	// Decode course prereq data
+	coursePrereqDataMap := make(map[string]coursePrerequisiteJson)
+	err = json.Unmarshal(prereqData, &coursePrereqDataMap)
+	if err != nil {
+		fmt.Println("Error unmarshalling response body:", err)
+		return err
+	}
+
+	// populate courseData with course catalog data
+	for key, c := range courseDataMap {
+		newDBCourse := &course.CourseDB{
+			Code:          key,
+			Name:          c.Name,
+			Prerequisites: [][]string{},
+			Corequisites:  []string{},
+			CrossListings: []string{},
+		}
+		courseData[key] = newDBCourse
+	}
+
+	// populate courseData with course prereq data
 	for key, cprq := range coursePrereqDataMap {
 		c, ok := courseData[key]
 		if ok {
@@ -116,28 +117,89 @@ func fetchCoursePrereqData(url string, courseData map[string]*course.CourseDB) e
 						courseData[crossListing] = &course
 					}
 					// else: cross listing also dont exist
-
 				}
 			}
 			// else: course not found and no cross listing
 		}
 	}
+
+	// no errors
 	return nil
 }
 
-func FetchAllData() {
-	// load env
+func fetchCourseCatalogData() ([]byte, error) {
 	env, err := config.LoadConfig()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	courseData := make(map[string]*course.CourseDB)
-	fetchCourseData(env.COURSE_DATA_URL, courseData)
-	fetchCoursePrereqData(env.COURSE_PREREQ_DATA_URL, courseData)
+	rootDir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	filepath := filepath.Join(rootDir, "internal", "data", "catalog.json")
 
-	for _, c := range courseData {
-		fmt.Println(c)
+	switch env.GO_ENV {
+	case "dev":
+		return fetchJsonDataFromLocalFile(filepath)
+	case "prod":
+		return fetchJsonDataFromGitHub(env.COURSE_DATA_URL)
+	default:
+		return fetchJsonDataFromLocalFile(filepath)
 	}
+}
+
+func fetchCoursePrereqData() ([]byte, error) {
+	env, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	rootDir, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	filepath := filepath.Join(rootDir, "internal", "data", "prereq_data.json")
+
+	switch env.GO_ENV {
+	case "dev":
+		return fetchJsonDataFromLocalFile(filepath)
+	case "prod":
+		return fetchJsonDataFromGitHub(env.COURSE_PREREQ_DATA_URL)
+	default:
+		return fetchJsonDataFromLocalFile(filepath)
+	}
+}
+
+func fetchJsonDataFromLocalFile(filePath string) ([]byte, error) {
+	jsonFile, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer jsonFile.Close()
+
+	dataBytes, err := io.ReadAll(jsonFile)
+	if err != nil {
+		return nil, err
+	}
+
+	return dataBytes, nil
+}
+
+func fetchJsonDataFromGitHub(url string) ([]byte, error) {
+	// Make the GET request
+	response, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer response.Body.Close()
+
+	data, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }
 
 func (p Prerequisite) TransformPrereqRecursive(res *[][]string) []string {

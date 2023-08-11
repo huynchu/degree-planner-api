@@ -8,6 +8,9 @@ import (
 )
 
 type EnvVars struct {
+	// Run environment
+	GO_ENV string `mapstructure:"GO_ENV"`
+
 	// Mongodb config
 	MONGODB_URI  string `mapstructure:"MONGODB_URI"`
 	MONGODB_NAME string `mapstructure:"MONGODB_NAME"`
@@ -78,6 +81,10 @@ func LoadConfig() (config EnvVars, err error) {
 	if config.AUTH0_AUDIENCE == "" {
 		err = errors.New("AUTH0_AUDIENCE is required")
 		return
+	}
+
+	if config.GO_ENV == "" {
+		config.GO_ENV = "dev"
 	}
 	return
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/huynchu/degree-planner-api/internal/degree-csv"
 	mymiddleware "github.com/huynchu/degree-planner-api/internal/middleware"
 	"github.com/huynchu/degree-planner-api/internal/storage"
+	"github.com/huynchu/degree-planner-api/internal/workers"
 )
 
 func main() {
@@ -49,6 +50,10 @@ func main() {
 	}
 	s3Client := s3.NewFromConfig(cfg)
 
+	// Run course data worker
+	courseDataWorker := workers.NewCourseDataWorker(db)
+	go courseDataWorker.Run()
+
 	// create chi router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -67,13 +72,13 @@ func main() {
 	r.Post("/degree-csv", degreeCsvController.UploadDegreeCsv)
 
 	r.Group(func(r chi.Router) {
-		r.Use(mymiddleware.EnsureValidToken)
+		r.Use(mymiddleware.EnsureValidToken())
 		r.Get("/api/private", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("private"))
 		})
 	})
 
 	// start server
-	fmt.Println("starting server...")
+	fmt.Println("starting server on port 8080...")
 	http.ListenAndServe(":8080", r)
 }

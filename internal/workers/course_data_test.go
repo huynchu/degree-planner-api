@@ -1,68 +1,45 @@
 package workers
 
-// func (p Prerequisite) TransformPrereqRecursive(res *[][]string) []string {
-// 	if p.Type == "and" {
-// 		for _, prereq := range p.Nested {
-// 			*res = append(*res, prereq.TransformPrereqRecursive(res))
-// 		}
-// 		return []string{}
-// 	} else if p.Type == "or" {
-// 		or := []string{}
-// 		for _, prereq := range p.Nested {
-// 			or = append(or, prereq.TransformPrereqRecursive(res)...)
-// 		}
-// 		return or
-// 	} else {
-// 		return []string{p.Course}
-// 	}
-// }
+import (
+	"testing"
 
-// func (p Prerequisite) TransformPrereq() [][]string {
-// 	if p.Type == "course" {
-// 		return [][]string{{p.Course}}
-// 	} else {
-// 		res := [][]string{}
-// 		p.TransformPrereqRecursive(&res)
-// 		return res
-// 	}
-// }
+	"github.com/huynchu/degree-planner-api/internal/course"
+	"go.mongodb.org/mongo-driver/bson"
+)
 
-// func TestParseCoursePreReqs(t *testing.T) {
-// 	jsonFile, err := os.Open("prereq_data.json")
-// 	if err != nil {
-// 		t.Errorf("error opening json file: %v", err)
-// 	}
+func TestCourseCompare(t *testing.T) {
+	course1 := course.CourseDB{
+		Name: "Introduction to Algorithms",
+		Code: "CSCI-2300",
+		Prerequisites: [][]string{
+			{"CSCI-1200"},
+			{"CSCI-2200", "MATH-2800"},
+			{"MATH-1010", "MATH-1500", "MATH-1020", "MATH-2010"},
+		},
+		Corequisites:  []string{},
+		CrossListings: []string{},
+	}
 
-// 	defer jsonFile.Close()
+	course1BSON := bson.M{
+		"name":          "Introduction to Algorithms",
+		"code":          "CSCI-2300",
+		"prerequisites": [][]string{{"CSCI-1200"}, {"CSCI-2200", "MATH-2800"}, {"MATH-1010", "MATH-1500", "MATH-1020", "MATH-2010"}},
+		"corequisites":  []string{},
+		"crossListings": []string{},
+	}
 
-// 	dataBytes, _ := io.ReadAll(jsonFile)
+	course1BSONEncoded, err := bson.Marshal(course1BSON)
+	if err != nil {
+		t.Error(err)
+	}
 
-// 	coursePrereqDataMap := make(map[string]interface{})
-// 	err = json.Unmarshal(dataBytes, &coursePrereqDataMap)
-// 	if err != nil {
-// 		t.Errorf("Error unmarshalling response body: %v", err)
-// 	}
-// 	coursePrereqDataMap2 := make(map[string]CoursePrerequisiteJson)
-// 	err = json.Unmarshal(dataBytes, &coursePrereqDataMap2)
-// 	if err != nil {
-// 		t.Errorf("Error unmarshalling response body: %v", err)
-// 	}
+	var course1BSONDecoded course.CourseDB
+	err = bson.Unmarshal(course1BSONEncoded, &course1BSONDecoded)
+	if err != nil {
+		t.Error(err)
+	}
 
-// 	for key := range coursePrereqDataMap {
-// 		if _, ok := coursePrereqDataMap2[key]; !ok {
-// 			t.Errorf("Error: key %v not found in coursePrereqDataMap2", key)
-// 		}
-// 	}
-
-// 	// collect key and sort
-// 	keys := make([]string, 0, len(coursePrereqDataMap2))
-// 	for key := range coursePrereqDataMap2 {
-// 		keys = append(keys, key)
-// 	}
-// 	sort.Strings(keys)
-// 	for _, key := range keys {
-// 		fmt.Println(key, coursePrereqDataMap2[key].Prerequisites.TransformPrereq())
-// 		// pq := coursePrereqDataMap2[key].Prerequisites.TransformPrereq()
-// 		// fmt.Println(pq)
-// 	}
-// }
+	if !course1.Equal(&course1BSONDecoded) {
+		t.Error("course1 != course1BSONDecoded")
+	}
+}

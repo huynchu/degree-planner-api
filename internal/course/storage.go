@@ -2,6 +2,7 @@ package course
 
 import (
 	"context"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -53,4 +54,49 @@ func (s *CourseStorage) FindCourseByID(id string) (*CourseDB, error) {
 	}
 
 	return &course, nil
+}
+
+// Course functions
+func (c *CourseDB) Equal(other *CourseDB) bool {
+	if c.Name != other.Name {
+		return false
+	}
+	if c.Code != other.Code {
+		return false
+	}
+	if len(c.Prerequisites) != len(other.Prerequisites) {
+		return false
+	}
+	for i := range c.Prerequisites {
+		if len(c.Prerequisites[i]) != len(other.Prerequisites[i]) {
+			return false
+		}
+		for j := range c.Prerequisites[i] {
+			if c.Prerequisites[i][j] != other.Prerequisites[i][j] {
+				return false
+			}
+		}
+	}
+	if len(c.Corequisites) != len(other.Corequisites) {
+		return false
+	}
+	for i := range c.Corequisites {
+		if c.Corequisites[i] != other.Corequisites[i] {
+			return false
+		}
+	}
+	if len(c.CrossListings) != len(other.CrossListings) {
+		return false
+	}
+	for i := range c.CrossListings {
+		if c.CrossListings[i] != other.CrossListings[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// for print
+func (c *CourseDB) String() string {
+	return fmt.Sprintf("%s %s %v %v %v", c.Code, c.Name, c.Prerequisites, c.Corequisites, c.CrossListings)
 }

@@ -1,15 +1,19 @@
 package workers
 
 import (
+	"container/list"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/huynchu/degree-planner-api/config"
 	"github.com/huynchu/degree-planner-api/internal/course"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -27,9 +31,51 @@ func (w *CourseDataWorker) Run() {
 	courseData := make(map[string]*course.CourseDB)
 	populateCourseData(courseData)
 
+	courseCollection := w.db.Collection("courses")
+	// Get existing courses from db
+	// cursor, _ := courseCollection.Find(context.Background(), bson.M{})
+	// defer cursor.Close(context.Background())
+	// for cursor.Next(context.Background()) {
+	// 	var dbCourse *course.CourseDB
+	// 	cursor.Decode(&dbCourse)
+
+	// 	newCourse, ok := courseData[dbCourse.Code]
+	// 	if !ok {
+	// 		fmt.Printf("course %s not found in course data\n", dbCourse.Code)
+	// 		continue
+	// 	}
+	// 	if !dbCourse.Equal(newCourse) {
+	// 		fmt.Printf("course %s has changed\n", dbCourse.Code)
+	// 		fmt.Println("old:", dbCourse)
+	// 		fmt.Println("new:", newCourse)
+	// 	}
+	// }
+
+	// Bulk update(upsert) courses
+	models := []mongo.WriteModel{}
 	for _, c := range courseData {
-		fmt.Println(c)
+		filter := bson.M{"code": c.Code}
+		update := bson.M{"$set": bson.M{
+			"name":          c.Name,
+			"prerequisites": c.Prerequisites,
+			"corequisites":  c.Corequisites,
+			"crossListings": c.CrossListings,
+		}}
+		models = append(models, mongo.NewUpdateOneModel().SetFilter(filter).SetUpdate(update).SetUpsert(true))
 	}
+
+	result, err := courseCollection.BulkWrite(context.Background(), models)
+	if err != nil {
+		fmt.Println("Error bulk writing course data:", err)
+		return
+	}
+
+	fmt.Println("Number of courses:", len(courseData))
+	fmt.Println("Bulk write result:")
+	fmt.Println("Matched", result.MatchedCount, "documents")
+	fmt.Println("Upserted", result.UpsertedCount, "documents")
+	fmt.Println("Modified", result.ModifiedCount, "documents")
+	fmt.Println("UpsertedIds", result.UpsertedIDs)
 }
 
 type courseJson struct {
@@ -41,9 +87,9 @@ type courseJson struct {
 
 type coursePrerequisiteJson struct {
 	// Atributes     []string     `json:"attributes"`
-	Corequisites  []string     `json:"corequisites"`
-	CrossListings []string     `json:"cross_listings"`
-	Prerequisites Prerequisite `json:"prerequisites"`
+	Corequisites  []string      `json:"corequisites"`
+	CrossListings []string      `json:"cross_listings"`
+	Prerequisites *Prerequisite `json:"prerequisites"`
 }
 
 type Prerequisite struct {
@@ -99,22 +145,40 @@ func populateCourseData(courseData map[string]*course.CourseDB) error {
 	for key, cprq := range coursePrereqDataMap {
 		c, ok := courseData[key]
 		if ok {
-			c.Corequisites = cprq.Corequisites
-			c.Prerequisites = cprq.Prerequisites.TransformPrereq()
-			c.CrossListings = cprq.CrossListings
+			if cprq.Corequisites != nil {
+				c.Corequisites = cprq.Corequisites
+			}
+			if cprq.Prerequisites != nil {
+				c.Prerequisites = cprq.Prerequisites.TransformPrereq()
+			}
+			if cprq.CrossListings != nil {
+				c.CrossListings = cprq.CrossListings
+			}
 		} else {
-			if cprq.CrossListings != nil || len(cprq.CrossListings) > 0 {
-				for _, crossListing := range cprq.CrossListings {
-					crossListedCourse, ok := courseData[crossListing]
+			hasCrossListings := cprq.CrossListings != nil && len(cprq.CrossListings) > 0
+			if hasCrossListings {
+				courseCrossListing := getCrossListings(key, coursePrereqDataMap)
+				for _, crossListing := range courseCrossListing {
+					_, ok := courseData[crossListing]
 					if ok {
 						course := course.CourseDB{
 							Code:          key,
-							Name:          crossListedCourse.Name,
-							Prerequisites: cprq.Prerequisites.TransformPrereq(),
-							Corequisites:  cprq.Corequisites,
-							CrossListings: cprq.CrossListings,
+							Name:          key + " (Cross-listed Course)",
+							Prerequisites: [][]string{},
+							Corequisites:  []string{},
+							CrossListings: []string{},
 						}
-						courseData[crossListing] = &course
+						if cprq.Corequisites != nil {
+							course.Corequisites = cprq.Corequisites
+						}
+						if cprq.Prerequisites != nil {
+							course.Prerequisites = cprq.Prerequisites.TransformPrereq()
+						}
+						if cprq.CrossListings != nil {
+							course.CrossListings = cprq.CrossListings
+						}
+						courseData[key] = &course
+						break
 					}
 					// else: cross listing also dont exist
 				}
@@ -125,6 +189,42 @@ func populateCourseData(courseData map[string]*course.CourseDB) error {
 
 	// no errors
 	return nil
+}
+
+func getCrossListings(ccode string, courseData map[string]coursePrerequisiteJson) []string {
+	visited := make(map[string]bool)
+
+	queue := list.New()
+	queue.PushBack(ccode)
+	for queue.Len() > 0 {
+		e := queue.Front()
+		queue.Remove(e)
+		courseCode := e.Value.(string)
+		visited[courseCode] = true
+		cdata, ok := courseData[courseCode]
+		if ok {
+			for _, crossListing := range cdata.CrossListings {
+				inQueue := false
+				for e := queue.Front(); e != nil; e = e.Next() {
+					if e.Value.(string) == crossListing {
+						inQueue = true
+						break
+					}
+				}
+				if !visited[crossListing] && !inQueue {
+					queue.PushBack(crossListing)
+				}
+			}
+		}
+	}
+
+	crossListings := make([]string, 0, len(visited))
+	for key := range visited {
+		if key != ccode {
+			crossListings = append(crossListings, key)
+		}
+	}
+	return crossListings
 }
 
 func fetchCourseCatalogData() ([]byte, error) {
@@ -215,13 +315,17 @@ func (p Prerequisite) TransformPrereqRecursive(res *[][]string) []string {
 		}
 		return or
 	} else {
-		return []string{p.Course}
+		tmp := strings.Split(p.Course, " ")
+		course := tmp[0] + "-" + tmp[1]
+		return []string{course}
 	}
 }
 
 func (p Prerequisite) TransformPrereq() [][]string {
 	if p.Type == "course" {
-		return [][]string{{p.Course}}
+		tmp := strings.Split(p.Course, " ")
+		course := tmp[0] + "-" + tmp[1]
+		return [][]string{{course}}
 	} else {
 		res := [][]string{}
 		p.TransformPrereqRecursive(&res)

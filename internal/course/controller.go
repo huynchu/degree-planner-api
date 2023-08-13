@@ -4,83 +4,76 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type CourseController struct {
-	storage *CourseStorage
+	courseService *CourseService
 }
 
-func NewCourseController(storage *CourseStorage) *CourseController {
+func NewCourseController(csrv *CourseService) *CourseController {
 	return &CourseController{
-		storage: storage,
+		courseService: csrv,
 	}
 }
 
-type CreateCourseRequest struct {
-	Name          string     `json:"name"`
-	Code          string     `json:"code"`
-	Prerequisites [][]string `json:"prerequisites"`
-	Corequisites  []string   `json:"corequisites"`
-}
-
-func (s *CourseController) CreateCourse(w http.ResponseWriter, r *http.Request) {
-	// decode json body
-	var createCourseReq CreateCourseRequest
-	err := json.NewDecoder(r.Body).Decode(&createCourseReq)
-	if err != nil {
-		fmt.Println(err)
-		http.Error(w, "invalid json body", http.StatusBadRequest)
-		return
-	}
-
-	// create course
-	course := &CourseDB{
-		Name:          createCourseReq.Name,
-		Code:          createCourseReq.Code,
-		Prerequisites: createCourseReq.Prerequisites,
-		Corequisites:  createCourseReq.Corequisites,
-	}
-
-	// insert course into db
-	insertedID, err := s.storage.CreateCourse(course)
-	if err != nil {
-		http.Error(w, "database insert error: create course", http.StatusInternalServerError)
-		return
-	}
-
-	// encode json response
-	res := struct {
-		ID string `json:"id"`
-	}{
-		ID: insertedID,
-	}
-
-	// Respond with json
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(res)
-}
-
-func (s *CourseController) FindCourseByID(w http.ResponseWriter, r *http.Request) {
+func (cc *CourseController) FindCourseByID(w http.ResponseWriter, r *http.Request) {
 	// extract url params
 	courseID := chi.URLParam(r, "courseID")
 
 	// fetch course from db
-	course, err := s.storage.FindCourseByID(courseID)
+	course, err := cc.courseService.FindCourseByID(courseID)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			http.Error(w, "course not found", http.StatusNotFound)
 			return
 		}
+		fmt.Println(err)
 		http.Error(w, "database fetch error: fetch course", http.StatusInternalServerError)
 		return
 	}
 
 	// Respond with json
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(course)
+}
+
+func (cc *CourseController) SearchCourse(w http.ResponseWriter, r *http.Request) {
+	// extract query params
+	query := r.URL.Query().Get("query")
+	if query == "" {
+		http.Error(w, "missing query param", http.StatusBadRequest)
+		return
+	}
+	maxLimit := 10
+	limit := 5
+	if limitQuery := r.URL.Query().Get("limit"); limitQuery != "" {
+		tmp, err := strconv.Atoi(limitQuery)
+		if err != nil || tmp <= 0 || tmp > maxLimit {
+			http.Error(w, fmt.Sprintf("invalid limit param: limit must be greater than 0 and then than %v", maxLimit), http.StatusBadRequest)
+			return
+		}
+		limit = tmp
+	}
+
+	// seach course
+	courses, err := cc.courseService.SearchCourse(query, limit)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "course not found", http.StatusNotFound)
+			return
+		}
+		fmt.Println(err)
+		http.Error(w, "database fetch error: fetch course", http.StatusInternalServerError)
+		return
+	}
+
+	// Respond with json
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(courses)
 }

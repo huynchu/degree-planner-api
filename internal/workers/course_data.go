@@ -32,24 +32,6 @@ func (w *CourseDataWorker) Run() {
 	populateCourseData(courseData)
 
 	courseCollection := w.db.Collection("courses")
-	// Get existing courses from db
-	// cursor, _ := courseCollection.Find(context.Background(), bson.M{})
-	// defer cursor.Close(context.Background())
-	// for cursor.Next(context.Background()) {
-	// 	var dbCourse *course.CourseDB
-	// 	cursor.Decode(&dbCourse)
-
-	// 	newCourse, ok := courseData[dbCourse.Code]
-	// 	if !ok {
-	// 		fmt.Printf("course %s not found in course data\n", dbCourse.Code)
-	// 		continue
-	// 	}
-	// 	if !dbCourse.Equal(newCourse) {
-	// 		fmt.Printf("course %s has changed\n", dbCourse.Code)
-	// 		fmt.Println("old:", dbCourse)
-	// 		fmt.Println("new:", newCourse)
-	// 	}
-	// }
 
 	// Bulk update(upsert) courses
 	models := []mongo.WriteModel{}

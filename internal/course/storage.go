@@ -7,6 +7,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+var (
+	COURSE_COLLECTION = "courses"
 )
 
 // How Course looks in MongoDB
@@ -30,25 +35,46 @@ func NewCourseStorage(db *mongo.Database) *CourseStorage {
 	}
 }
 
-func (s *CourseStorage) CreateCourse(course *CourseDB) (string, error) {
-	collection := s.db.Collection("Courses")
+func (s *CourseStorage) FindCourseByNameOrCode(query string, limit int) ([]CourseDB, error) {
+	collection := s.db.Collection(COURSE_COLLECTION)
 
-	// Insert the course
-	insertResult, err := collection.InsertOne(context.Background(), course)
-	if err != nil {
-		return "", err
+	// Find the course by name or code
+	filter := bson.M{
+		"$or": bson.A{
+			bson.M{"name": primitive.Regex{Pattern: query, Options: "i"}},
+			bson.M{"code": primitive.Regex{Pattern: query, Options: "i"}},
+		},
 	}
 
-	return insertResult.InsertedID.(primitive.ObjectID).Hex(), nil
+	findOptions := options.Find().SetLimit(int64(limit))
+	cursor, err := collection.Find(context.Background(), filter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	defer cursor.Close(context.Background())
+
+	// Decode the results
+	var courses []CourseDB
+	err = cursor.All(context.Background(), &courses)
+	if err != nil {
+		return nil, err
+	}
+
+	return courses, nil
 }
 
 func (s *CourseStorage) FindCourseByID(id string) (*CourseDB, error) {
-	collection := s.db.Collection("Courses")
+	collection := s.db.Collection(COURSE_COLLECTION)
+
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
 
 	// Find the course by ID
-	filter := bson.M{"_id": id}
 	var course CourseDB
-	err := collection.FindOne(context.Background(), filter).Decode(&course)
+	err = collection.FindOne(context.Background(), bson.M{"_id": objId}).Decode(&course)
 	if err != nil {
 		return nil, err
 	}

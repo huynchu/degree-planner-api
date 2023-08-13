@@ -1,4 +1,4 @@
-package degree
+package degreecsv
 
 import (
 	"mime/multipart"

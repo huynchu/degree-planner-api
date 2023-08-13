@@ -4,10 +4,6 @@ import "github.com/go-chi/chi/v5"
 
 func AddCourseRoutes(r chi.Router, controller *CourseController) {
 
-	courseRouter := chi.NewRouter()
-
-	courseRouter.Get("/courses/{id}", controller.FindCourseByID)
-	courseRouter.Post("/courses", controller.CreateCourse)
-
-	r.Mount("/api", courseRouter)
+	r.Get("/api/courses/{courseID}", controller.FindCourseByID)
+	r.Get("/api/courses/search/", controller.SearchCourse)
 }

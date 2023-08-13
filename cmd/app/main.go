@@ -13,10 +13,10 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/huynchu/degree-planner-api/config"
 	"github.com/huynchu/degree-planner-api/internal/course"
-	"github.com/huynchu/degree-planner-api/internal/degree-csv"
+	"github.com/huynchu/degree-planner-api/internal/degree"
+	degreecsv "github.com/huynchu/degree-planner-api/internal/degree-csv"
 	mymiddleware "github.com/huynchu/degree-planner-api/internal/middleware"
 	"github.com/huynchu/degree-planner-api/internal/storage"
-	"github.com/huynchu/degree-planner-api/internal/workers"
 )
 
 func main() {
@@ -51,8 +51,8 @@ func main() {
 	s3Client := s3.NewFromConfig(cfg)
 
 	// Run course data worker
-	courseDataWorker := workers.NewCourseDataWorker(db)
-	go courseDataWorker.Run()
+	// courseDataWorker := workers.NewCourseDataWorker(db)
+	// go courseDataWorker.Run()
 
 	// create chi router
 	r := chi.NewRouter()
@@ -63,12 +63,19 @@ func main() {
 
 	// add course routes
 	courseStorage := course.NewCourseStorage(db)
-	courseController := course.NewCourseController(courseStorage)
+	courseService := course.NewCourseService(courseStorage)
+	courseController := course.NewCourseController(courseService)
 	course.AddCourseRoutes(r, courseController)
 
+	// add degree routes
+	degreeStorage := degree.NewDegreeStorage(db)
+	degreeService := degree.NewDegreeService(degreeStorage, courseService)
+	degreeController := degree.NewDegreeController(degreeService)
+	degree.AddDegreeRoutes(r, degreeController)
+
 	// add degree csv routes
-	degreeCsvStorage := degree.NewDegreeCsvStorage("degree-csv", storage.NewS3FileStorage(s3Client))
-	degreeCsvController := degree.NewDegreeCsvController(degreeCsvStorage)
+	degreeCsvStorage := degreecsv.NewDegreeCsvStorage("degree-csv", storage.NewS3FileStorage(s3Client))
+	degreeCsvController := degreecsv.NewDegreeCsvController(degreeCsvStorage)
 	r.Post("/degree-csv", degreeCsvController.UploadDegreeCsv)
 
 	r.Group(func(r chi.Router) {

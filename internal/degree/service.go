@@ -170,7 +170,7 @@ func (ds *DegreeService) RemoveCourseFromSemester(degreeID string, semesterIndex
 	}
 
 	// Remove course from semester
-	semester := degree.Semesters[semesterIndex]
+	semester := &degree.Semesters[semesterIndex]
 	courseIndex := -1
 	for i, course := range semester.Courses {
 		if course.Hex() == courseID {

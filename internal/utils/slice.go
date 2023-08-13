@@ -31,3 +31,12 @@ func Move[T any](slice []T, from int, to int) []T {
 
 	return ret
 }
+
+func Remove[T any](slice []T, index int) []T {
+	// Remove the element at the from index
+	ret := make([]T, 0)
+	ret = append(ret, slice[:index]...)
+	ret = append(ret, slice[index+1:]...)
+
+	return ret
+}

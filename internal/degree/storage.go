@@ -2,10 +2,8 @@ package degree
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/huynchu/degree-planner-api/internal/course"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -76,36 +74,6 @@ func (d *DegreeStorage) FindDegreeByID(id string) (*DegreeDB, error) {
 	err = collection.FindOne(context.Background(), primitive.M{"_id": objId}).Decode(&degree)
 	if err != nil {
 		return nil, err
-	}
-
-	pipeline := []bson.M{
-		// Match the Degree by its ID (replace with your match criteria)
-		{
-			"$match": bson.M{"_id": objId},
-		},
-		// Lookup Courses within each Semester
-		{
-			"$lookup": bson.M{
-				"from":         course.COURSE_COLLECTION,
-				"localField":   "semesters.courses",
-				"foreignField": "_id",
-				"as":           "courses_info",
-			},
-		},
-	}
-	// Aggregate the Degree
-	cursor, err := collection.Aggregate(context.Background(), pipeline)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(context.Background())
-	for cursor.Next(context.Background()) {
-		var tmp interface{}
-		err := cursor.Decode(&tmp)
-		if err != nil {
-			return nil, err
-		}
-		fmt.Println(tmp)
 	}
 
 	return &degree, nil

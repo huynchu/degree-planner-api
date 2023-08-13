@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -108,4 +109,84 @@ func (dc *DegreeController) AddSemester(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode("added semester successfully")
+}
+
+type MoveSemesterRequest struct {
+	NewIndex int `json:"newIndex"`
+}
+
+func (dc *DegreeController) MoveSemester(w http.ResponseWriter, r *http.Request) {
+	// extract url params
+	degreeID := chi.URLParam(r, "degreeID")
+	indexStr := chi.URLParam(r, "index")
+
+	// convert index to int
+	index, err := strconv.Atoi(indexStr)
+	if err != nil {
+		http.Error(w, "invalid index", http.StatusBadRequest)
+		return
+	}
+
+	// decode json body
+	var moveSemesterReq MoveSemesterRequest
+	err = json.NewDecoder(r.Body).Decode(&moveSemesterReq)
+	if err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	// move semester
+	err = dc.degreeService.MoveSemester(degreeID, index, moveSemesterReq.NewIndex)
+	if err != nil {
+		if err == ErrSemesterIndexOutOfBounds {
+			http.Error(w, "semester index out of bounds", http.StatusBadRequest)
+			return
+		}
+		fmt.Println(err)
+		http.Error(w, "database update error: move semester", http.StatusInternalServerError)
+		return
+	}
+
+	// Respond with json
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode("moved semester successfully")
+}
+
+type AddCourseRequest struct {
+	CourseID string `json:"courseID"`
+}
+
+func (dc *DegreeController) AddCourse(w http.ResponseWriter, r *http.Request) {
+	// extract url params
+	degreeID := chi.URLParam(r, "degreeID")
+	semesterIndexStr := chi.URLParam(r, "index")
+
+	// convert index to int
+	semesterIndex, err := strconv.Atoi(semesterIndexStr)
+	if err != nil {
+		http.Error(w, "invalid semester index", http.StatusBadRequest)
+		return
+	}
+
+	// decode json body
+	var addCourseReq AddCourseRequest
+	err = json.NewDecoder(r.Body).Decode(&addCourseReq)
+	if err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+
+	// add course
+	err = dc.degreeService.AddCourseToSemester(degreeID, semesterIndex, addCourseReq.CourseID)
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Respond with json
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode("added course successfully")
 }

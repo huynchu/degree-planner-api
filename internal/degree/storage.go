@@ -2,10 +2,25 @@ package degree
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/huynchu/degree-planner-api/internal/course"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+type DegreeAggregated struct {
+	ID        primitive.ObjectID   `bson:"_id,omitempty" json:"id,omitempty"`
+	Name      string               `bson:"name" json:"name"`
+	Semesters []SemesterAggregated `bson:"semesters" json:"semesters"`
+	Owner     primitive.ObjectID   `bson:"owner,omitempty" json:"owner,omitempty"`
+}
+
+type SemesterAggregated struct {
+	Name    string            `bson:"name" json:"name"`
+	Courses []course.CourseDB `bson:"courses" json:"courses"`
+}
 
 // How Course looks in MongoDB
 type DegreeDB struct {
@@ -56,11 +71,41 @@ func (d *DegreeStorage) FindDegreeByID(id string) (*DegreeDB, error) {
 		return nil, err
 	}
 
-	// Find the course
+	// Find the degree
 	var degree DegreeDB
 	err = collection.FindOne(context.Background(), primitive.M{"_id": objId}).Decode(&degree)
 	if err != nil {
 		return nil, err
+	}
+
+	pipeline := []bson.M{
+		// Match the Degree by its ID (replace with your match criteria)
+		{
+			"$match": bson.M{"_id": objId},
+		},
+		// Lookup Courses within each Semester
+		{
+			"$lookup": bson.M{
+				"from":         course.COURSE_COLLECTION,
+				"localField":   "semesters.courses",
+				"foreignField": "_id",
+				"as":           "courses_info",
+			},
+		},
+	}
+	// Aggregate the Degree
+	cursor, err := collection.Aggregate(context.Background(), pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+	for cursor.Next(context.Background()) {
+		var tmp interface{}
+		err := cursor.Decode(&tmp)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println(tmp)
 	}
 
 	return &degree, nil

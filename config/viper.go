@@ -23,6 +23,11 @@ type EnvVars struct {
 	// Auth0 config
 	AUTH0_DOMAIN   string `mapstructure:"AUTH0_DOMAIN"`
 	AUTH0_AUDIENCE string `mapstructure:"AUTH0_AUDIENCE"`
+
+	// Google oAuth config
+	GOOGLE_CLIENT_ID     string `mapstructure:"GOOGLE_CLIENT_ID"`
+	GOOGLE_CLIENT_SECRET string `mapstructure:"GOOGLE_CLIENT_SECRET"`
+	OAUTH_STATE_STRING   string `mapstructure:"OAUTH_STATE_STRING"`
 }
 
 func LoadConfig() (config EnvVars, err error) {
@@ -36,6 +41,9 @@ func LoadConfig() (config EnvVars, err error) {
 			COURSE_PREREQ_DATA_URL: os.Getenv("COURSE_PREREQ_DATA_URL"),
 			AUTH0_DOMAIN:           os.Getenv("AUTH0_DOMAIN"),
 			AUTH0_AUDIENCE:         os.Getenv("AUTH0_AUDIENCE"),
+			GOOGLE_CLIENT_ID:       os.Getenv("GOOGLE_CLIENT_ID"),
+			GOOGLE_CLIENT_SECRET:   os.Getenv("GOOGLE_CLIENT_SECRET"),
+			OAUTH_STATE_STRING:     os.Getenv("OAUTH_STATE_STRING"),
 		}, nil
 	}
 
@@ -80,6 +88,16 @@ func LoadConfig() (config EnvVars, err error) {
 
 	if config.AUTH0_AUDIENCE == "" {
 		err = errors.New("AUTH0_AUDIENCE is required")
+		return
+	}
+
+	if config.GOOGLE_CLIENT_ID == "" {
+		err = errors.New("GOOGLE_CLIENT_ID is required")
+		return
+	}
+
+	if config.GOOGLE_CLIENT_SECRET == "" {
+		err = errors.New("GOOGLE_CLIENT_SECRET is required")
 		return
 	}
 

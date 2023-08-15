@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/huynchu/degree-planner-api/config"
+	"github.com/huynchu/degree-planner-api/internal/auth"
 	"github.com/huynchu/degree-planner-api/internal/course"
 	"github.com/huynchu/degree-planner-api/internal/degree"
 	degreecsv "github.com/huynchu/degree-planner-api/internal/degree-csv"
@@ -78,12 +79,18 @@ func main() {
 	degreeCsvController := degreecsv.NewDegreeCsvController(degreeCsvStorage)
 	r.Post("/degree-csv", degreeCsvController.UploadDegreeCsv)
 
+	// auth0 endpoints
 	r.Group(func(r chi.Router) {
 		r.Use(mymiddleware.EnsureValidToken())
 		r.Get("/api/private", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("private"))
 		})
 	})
+
+	// Google login endpoint
+	auth.InitializeOAuthGoogle()
+	r.Get("/api/auth/login/google", auth.HandleGoogleLogin)
+	r.HandleFunc("/api/auth/google/callback", auth.CallBackFromGoogle)
 
 	// start server
 	fmt.Println("starting server on port 8080...")

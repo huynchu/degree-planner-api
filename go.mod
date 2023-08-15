@@ -7,11 +7,15 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.18.33
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.38.2
 	github.com/go-chi/chi/v5 v5.0.10
+	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/spf13/viper v1.16.0
 	go.mongodb.org/mongo-driver v1.12.1
+	golang.org/x/oauth2 v0.7.0
 )
 
 require (
+	cloud.google.com/go/compute v1.19.0 // indirect
+	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.20.1 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.12 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.13.32 // indirect
@@ -29,6 +33,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.21.2 // indirect
 	github.com/aws/smithy-go v1.14.1 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
@@ -47,9 +52,12 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20181117223130-1be2e3e5546d // indirect
 	golang.org/x/crypto v0.12.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
+	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

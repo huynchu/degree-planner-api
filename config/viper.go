@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -28,11 +30,27 @@ type EnvVars struct {
 	GOOGLE_CLIENT_ID     string `mapstructure:"GOOGLE_CLIENT_ID"`
 	GOOGLE_CLIENT_SECRET string `mapstructure:"GOOGLE_CLIENT_SECRET"`
 	OAUTH_STATE_STRING   string `mapstructure:"OAUTH_STATE_STRING"`
+
+	// JWT config
+	JWT_SECRET       string        `mapstructure:"JWT_SECRET"`
+	TOKEN_EXPIRED_IN time.Duration `mapstructure:"TOKEN_EXPIRED_IN"`
+	TOKEN_MAXAGE     int           `mapstructure:"TOKEN_MAXAGE"`
 }
 
 func LoadConfig() (config EnvVars, err error) {
 	env := os.Getenv("GO_ENV")
 	if env == "production" {
+		token_expires_in := os.Getenv("TOKEN_EXPIRED_IN")
+		token_ttl, err := time.ParseDuration(token_expires_in)
+		if err != nil {
+			return EnvVars{}, err
+		}
+		token_max_age := os.Getenv("TOKEN_MAXAGE")
+		token_maxage, err := strconv.Atoi(token_max_age)
+		if err != nil {
+			return EnvVars{}, err
+		}
+
 		return EnvVars{
 			MONGODB_URI:            os.Getenv("MONGODB_URI"),
 			MONGODB_NAME:           os.Getenv("MONGODB_NAME"),
@@ -44,6 +62,9 @@ func LoadConfig() (config EnvVars, err error) {
 			GOOGLE_CLIENT_ID:       os.Getenv("GOOGLE_CLIENT_ID"),
 			GOOGLE_CLIENT_SECRET:   os.Getenv("GOOGLE_CLIENT_SECRET"),
 			OAUTH_STATE_STRING:     os.Getenv("OAUTH_STATE_STRING"),
+			JWT_SECRET:             os.Getenv("JWT_SECRET"),
+			TOKEN_EXPIRED_IN:       token_ttl,
+			TOKEN_MAXAGE:           token_maxage,
 		}, nil
 	}
 

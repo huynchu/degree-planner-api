@@ -2,7 +2,7 @@ package auth
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
@@ -23,6 +23,12 @@ var (
 	oauthStateStringGl = ""
 )
 
+type GoogleUser struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	VerifiedEmail bool   `json:"verified_email"`
+}
+
 func InitializeOAuthGoogle() {
 	// load config
 	env, err := config.LoadConfig()
@@ -41,54 +47,47 @@ func HandleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func CallBackFromGoogle(w http.ResponseWriter, r *http.Request) {
-
 	state := r.FormValue("state")
-	fmt.Println(state)
 	if state != oauthStateStringGl {
-		fmt.Println("invalid oauth state, expected " + oauthStateStringGl + ", got " + state + "\n")
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Error(w, "Invalid Session State", http.StatusUnauthorized)
 		return
 	}
 
 	code := r.FormValue("code")
-	fmt.Println(code)
 
 	if code == "" {
-		w.Write([]byte("Code Not Found to provide AccessToken..\n"))
-		reason := r.FormValue("error_reason")
-		if reason == "user_denied" {
-			w.Write([]byte("User has denied Permission.."))
-		}
-		// User has denied access..
-		// http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		http.Error(w, "Invalid Google authorization code", http.StatusUnauthorized)
+		return
 	} else {
+		// Exchange Google auth code for Google tokens
 		token, err := oauthConfGl.Exchange(context.Background(), code)
 		if err != nil {
-			fmt.Println("oauthConfGl.Exchange() failed with " + err.Error() + "\n")
+			http.Error(w, "Invalid Google authorization code: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
-		fmt.Println("TOKEN>> AccessToken>> " + token.AccessToken)
-		fmt.Println("TOKEN>> Expiration Time>> " + token.Expiry.String())
-		fmt.Println("TOKEN>> RefreshToken>> " + token.RefreshToken)
 
+		// Get Google user info from token
 		resp, err := http.Get("https://www.googleapis.com/oauth2/v2/userinfo?access_token=" + url.QueryEscape(token.AccessToken))
 		if err != nil {
-			fmt.Println("Get: " + err.Error() + "\n")
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			http.Error(w, "Invalid Google token: "+err.Error(), http.StatusUnauthorized)
 			return
 		}
 		defer resp.Body.Close()
 
 		response, err := io.ReadAll(resp.Body)
 		if err != nil {
-			fmt.Println("ReadAll: " + err.Error() + "\n")
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			http.Error(w, "Could not read req body: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Println("parseResponseBody: " + string(response) + "\n")
+		// Decode response into GoogleUser struct
+		var googleUser GoogleUser
+		err = json.Unmarshal(response, &googleUser)
+		if err != nil {
+			http.Error(w, "Could not unmarshal response: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-		w.Write([]byte("Hello, I'm protected\n"))
 		w.Write([]byte(string(response)))
 		return
 	}

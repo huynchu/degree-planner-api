@@ -2,80 +2,69 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"net/http"
-	"net/url"
-	"os"
-	"strings"
-	"time"
 
-	jwtmiddleware "github.com/auth0/go-jwt-middleware/v2"
-	"github.com/auth0/go-jwt-middleware/v2/jwks"
-	"github.com/auth0/go-jwt-middleware/v2/validator"
+	"github.com/huynchu/degree-planner-api/config"
+	"github.com/huynchu/degree-planner-api/internal/user"
+	"github.com/huynchu/degree-planner-api/internal/utils"
 )
 
-// CustomClaims contains custom data we want from the token.
-type CustomClaims struct {
-	Scope string `json:"scope"`
-}
+type authCtxKey struct{}
 
-// Validate does nothing for this example, but we need
-// it to satisfy validator.CustomClaims interface.
-func (c CustomClaims) Validate(ctx context.Context) error {
-	return nil
-}
+// Auth middleware validates an incoming request jwt token and adds the Account._id of that user to
+// the request context. Add this middleware to a route and extract the accountID as follow:
+//
+//	authedAccountID := ctx.Value(authCtxKey{}).(primitive.ObjectID)
 
-// EnsureValidToken is a middleware that will check the validity of our JWT.
-func EnsureValidToken() func(next http.Handler) http.Handler {
-	issuerURL, err := url.Parse("https://" + os.Getenv("AUTH0_DOMAIN") + "/")
-	if err != nil {
-		log.Fatalf("Failed to parse the issuer url: %v", err)
-	}
-
-	provider := jwks.NewCachingProvider(issuerURL, 5*time.Minute)
-
-	jwtValidator, err := validator.New(
-		provider.KeyFunc,
-		validator.RS256,
-		issuerURL.String(),
-		[]string{os.Getenv("AUTH0_AUDIENCE")},
-		validator.WithCustomClaims(
-			func() validator.CustomClaims {
-				return &CustomClaims{}
-			},
-		),
-		validator.WithAllowedClockSkew(time.Minute),
-	)
-	if err != nil {
-		log.Fatalf("Failed to set up the jwt validator")
-	}
-
-	errorHandler := func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("Encountered error while validating JWT: %v", err)
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"message":"Failed to validate JWT."}`))
-	}
-
-	middleware := jwtmiddleware.New(
-		jwtValidator.ValidateToken,
-		jwtmiddleware.WithErrorHandler(errorHandler),
-	)
-
+func NewAuthMiddleWare(userService *user.UserService) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return middleware.CheckJWT(next)
-	}
-}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Extract access token from the cookie or authorization header
+			accessToken := ""
+			cookie, err := r.Cookie("access_token")
+			if err == nil {
+				accessToken = cookie.Value
+			} else {
+				authHeader := r.Header.Get("Authorization")
+				if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+					accessToken = authHeader[7:]
+				}
+			}
 
-// HasScope checks whether our claims have a specific scope.
-func (c CustomClaims) HasScope(expectedScope string) bool {
-	result := strings.Split(c.Scope, " ")
-	for i := range result {
-		if result[i] == expectedScope {
-			return true
-		}
-	}
+			// Check tokens exists and is not malformed
+			if accessToken == "" {
+				http.Error(w, "Unauthorized: missing/malformed access token", http.StatusUnauthorized)
+				return
+			}
 
-	return false
+			env, err := config.LoadConfig()
+			if err != nil {
+				http.Error(w, "err loading config", http.StatusInternalServerError)
+				return
+			}
+
+			claims, err := utils.ValidateToken(accessToken, env.JWT_SECRET)
+			if err != nil {
+				http.Error(w, "Unauthorized: invalid token", http.StatusUnauthorized)
+				return
+			}
+
+			// Find user in database
+			email := claims.(string)
+			usr, err := userService.FindUserByEmail(email)
+			if err != nil {
+				http.Error(w, "Unauthorized: invalid token", http.StatusUnauthorized)
+				return
+			}
+
+			fmt.Println(usr)
+
+			// Add the User to the request context
+			ctx := context.WithValue(r.Context(), authCtxKey{}, usr)
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }

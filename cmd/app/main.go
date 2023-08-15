@@ -18,6 +18,7 @@ import (
 	degreecsv "github.com/huynchu/degree-planner-api/internal/degree-csv"
 	mymiddleware "github.com/huynchu/degree-planner-api/internal/middleware"
 	"github.com/huynchu/degree-planner-api/internal/storage"
+	"github.com/huynchu/degree-planner-api/internal/user"
 )
 
 func main() {
@@ -55,29 +56,45 @@ func main() {
 	// courseDataWorker := workers.NewCourseDataWorker(db)
 	// go courseDataWorker.Run()
 
-	// create chi router
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("welcome"))
-	})
-
-	// add course routes
+	// Create Course dependencies
 	courseStorage := course.NewCourseStorage(db)
 	courseService := course.NewCourseService(courseStorage)
 	courseController := course.NewCourseController(courseService)
-	course.AddCourseRoutes(r, courseController)
-
-	// add degree routes
+	// Create Degree dependencies
 	degreeStorage := degree.NewDegreeStorage(db)
 	degreeService := degree.NewDegreeService(degreeStorage, courseService)
 	degreeController := degree.NewDegreeController(degreeService)
-	degree.AddDegreeRoutes(r, degreeController)
-
-	// add degree csv routes
 	degreeCsvStorage := degreecsv.NewDegreeCsvStorage("degree-csv", storage.NewS3FileStorage(s3Client))
 	degreeCsvController := degreecsv.NewDegreeCsvController(degreeCsvStorage)
-	r.Post("/degree-csv", degreeCsvController.UploadDegreeCsv)
+	// Create User dependencies
+	userStorage := user.NewUserStorage(db)
+	userService := user.NewUserService(userStorage)
+	// userController := user.NewUserController(userService)
+	// Create Auth dependencies
+	authController := auth.NewAuthController(userService)
+
+	// create chi router
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+
+	// Public routes
+	r.Group(func(r chi.Router) {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("welcome")) })
+
+		r.Get("/api/auth/login/google", authController.HandleGoogleLogin)
+		r.HandleFunc("/api/auth/google/callback", authController.CallBackFromGoogle)
+	})
+
+	// Authed routes
+	r.Group(func(r chi.Router) {
+		r.Use(mymiddleware.NewAuthMiddleWare(userService))
+
+		course.AddCourseRoutes(r, courseController)
+
+		degree.AddDegreeRoutes(r, degreeController)
+
+		r.Post("/degree-csv", degreeCsvController.UploadDegreeCsv)
+	})
 
 	// auth0 endpoints
 	r.Group(func(r chi.Router) {
@@ -86,11 +103,6 @@ func main() {
 			w.Write([]byte("private"))
 		})
 	})
-
-	// Google login endpoint
-	auth.InitializeOAuthGoogle()
-	r.Get("/api/auth/login/google", auth.HandleGoogleLogin)
-	r.HandleFunc("/api/auth/google/callback", auth.CallBackFromGoogle)
 
 	// start server
 	fmt.Println("starting server on port 8080...")

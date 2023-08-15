@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,7 +13,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, oauthConf *oauth2.Confi
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(URL.String())
+
 	parameters := url.Values{}
 	parameters.Add("client_id", oauthConf.ClientID)
 	parameters.Add("scope", strings.Join(oauthConf.Scopes, " "))
@@ -23,6 +22,6 @@ func HandleLogin(w http.ResponseWriter, r *http.Request, oauthConf *oauth2.Confi
 	parameters.Add("state", oauthStateString)
 	URL.RawQuery = parameters.Encode()
 	url := URL.String()
-	fmt.Println(url)
+
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
